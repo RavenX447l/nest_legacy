@@ -7,6 +7,7 @@ import time
 from typing import Any
 
 from google.protobuf import duration_pb2, timestamp_pb2
+from google.protobuf.message import Message
 
 from .enums import (
     DualFuelBreakpointOverride,
@@ -180,6 +181,21 @@ def _get_protobuf_location(
             return wheres_map[canonical]
 
     return None
+
+
+def _hot_water_traits_report_data(traits: dict[str, Any]) -> bool:
+    """Return True when the hot water traits carry actual hot water data.
+
+    Traits are sometimes delivered as an empty message, so their presence
+    alone does not prove anything.
+    """
+    return any(
+        isinstance(trait, Message) and trait.ByteSize() > 0
+        for trait in (
+            traits.get(nest_hvac_pb2.HotWaterTrait.DESCRIPTOR.full_name),
+            traits.get(nest_hvac_pb2.HotWaterSettingsTrait.DESCRIPTOR.full_name),
+        )
+    )
 
 
 def _milli_volt_to_percentage(state: int) -> float:
@@ -1258,6 +1274,15 @@ class NestParser:
             has_hot_water_temperature = capabilities_trait.hasHotWaterTemperature
             has_humidifier = capabilities_trait.hasHumidifier
             has_air_filter = capabilities_trait.hasAirFilter
+
+        # Not every Heat Link sets the hot water flags on
+        # HvacEquipmentCapabilitiesTrait: a Thermostat E with a Heat Link can
+        # report heat stages only, while still publishing the hot water traits.
+        # Without this the Heat Link is never created. The heat connection type
+        # on HeatLinkSettingsTrait is not used, since a Heat Link wired for
+        # central heating only reports it too.
+        if _hot_water_traits_report_data(traits):
+            has_hot_water_control = True
 
         return (
             can_heat,

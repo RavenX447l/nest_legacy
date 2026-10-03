@@ -44,6 +44,8 @@ from ..const import (
 
 THERMOSTAT = "09AA00AA00AA0AAA"
 
+_HEAT_LINK_CONNECTION = nest_hvac_pb2.HeatLinkSettingsTrait.HeatLinkConnectionType
+
 
 @pytest.fixture
 async def raw_data(hass: HomeAssistant) -> dict[str, Any]:
@@ -351,6 +353,74 @@ async def test_protobuf_heat_link(parser: NestParser, raw_data: dict[str, Any]) 
     assert heat_link.hot_water_active
     assert heat_link.hot_water_control_active
     assert heat_link.current_temperature == 54.5
+
+
+def _without_hot_water_flags(raw_data: dict[str, Any]) -> None:
+    """Clear the hot water flags the capabilities trait may carry."""
+    capabilities = raw_data[THERMOSTAT_KEY][
+        nest_hvac_pb2.HvacEquipmentCapabilitiesTrait.DESCRIPTOR.full_name
+    ]
+    capabilities.hasHotWaterControl = False
+    capabilities.hasHotWaterTemperature = False
+
+
+@pytest.mark.usefixtures("hot_water")
+async def test_protobuf_heat_link_without_capability_flags(
+    parser: NestParser, raw_data: dict[str, Any]
+) -> None:
+    """The hot water traits alone prove the Heat Link is there.
+
+    A Thermostat E reports heat stages on HvacEquipmentCapabilitiesTrait and
+    leaves both hot water flags unset.
+    """
+    _without_hot_water_flags(raw_data)
+
+    heat_link = _by_serial(parser, raw_data)[HEAT_LINK_SERIAL]
+
+    assert isinstance(heat_link, NestHeatLink)
+
+
+@pytest.mark.usefixtures("hot_water")
+async def test_no_protobuf_heat_link_for_central_heating_only(
+    parser: NestParser, raw_data: dict[str, Any]
+) -> None:
+    """A Heat Link wired for central heating only has no hot water.
+
+    Its heat connection type is set like that of a Heat Link that also drives
+    hot water, so it is not proof of hot water control.
+    """
+    _without_hot_water_flags(raw_data)
+    traits = raw_data[THERMOSTAT_KEY]
+    traits.pop(nest_hvac_pb2.HotWaterTrait.DESCRIPTOR.full_name)
+    traits.pop(nest_hvac_pb2.HotWaterSettingsTrait.DESCRIPTOR.full_name)
+    traits[nest_hvac_pb2.HeatLinkSettingsTrait.DESCRIPTOR.full_name] = (
+        nest_hvac_pb2.HeatLinkSettingsTrait(
+            heatConnectionType=_HEAT_LINK_CONNECTION.HEAT_LINK_CONNECTION_TYPE_ON_OFF,
+            hotWaterConnectionType=_HEAT_LINK_CONNECTION.HEAT_LINK_CONNECTION_TYPE_NOT_CONNECTED,
+        )
+    )
+
+    assert HEAT_LINK_SERIAL not in _by_serial(parser, raw_data)
+
+
+@pytest.mark.usefixtures("hot_water")
+async def test_no_protobuf_heat_link_from_empty_traits(
+    parser: NestParser, raw_data: dict[str, Any]
+) -> None:
+    """An empty trait is not proof of a Heat Link.
+
+    Traits are sometimes delivered with no fields set.
+    """
+    _without_hot_water_flags(raw_data)
+    traits = raw_data[THERMOSTAT_KEY]
+    traits[nest_hvac_pb2.HotWaterTrait.DESCRIPTOR.full_name] = (
+        nest_hvac_pb2.HotWaterTrait()
+    )
+    traits[nest_hvac_pb2.HotWaterSettingsTrait.DESCRIPTOR.full_name] = (
+        nest_hvac_pb2.HotWaterSettingsTrait()
+    )
+
+    assert HEAT_LINK_SERIAL not in _by_serial(parser, raw_data)
 
 
 async def test_protobuf_hot_water_away_is_the_state_not_the_setting(
