@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from custom_components.nest_legacy.pynest.client import NestClient
 from custom_components.nest_legacy.pynest.exceptions import (
+    AuthenticationFailedException,
     NonRetryablePynestException,
     NotAuthenticatedException,
     PynestException,
@@ -216,23 +217,27 @@ async def test_protobuf_command(
 
 
 @pytest.mark.parametrize(
-    ("code", "expected"),
+    ("code", "message", "expected"),
     [
         # INVALID_ARGUMENT, the failure behind issue #33.
-        (3, NonRetryablePynestException),
-        (5, NonRetryablePynestException),
-        (9, NonRetryablePynestException),
-        (16, NotAuthenticatedException),
+        (3, "nope", NonRetryablePynestException),
+        (5, "nope", NonRetryablePynestException),
+        (7, "nope", NonRetryablePynestException),
+        # PERMISSION_DENIED for a stale session, the failure behind issue #81.
+        (7, "authentication failed", AuthenticationFailedException),
+        (9, "nope", NonRetryablePynestException),
+        (16, "nope", NotAuthenticatedException),
     ],
 )
 async def test_protobuf_command_is_not_retried_when_it_cannot_succeed(
     client: NestClient,
     aioclient_mock: AiohttpClientMocker,
     code: int,
+    message: str,
     expected: type[Exception],
 ) -> None:
     """A rejected command fails immediately rather than being hammered."""
-    aioclient_mock.post(SEND_COMMAND_URL, content=_command_response(code, "nope"))
+    aioclient_mock.post(SEND_COMMAND_URL, content=_command_response(code, message))
 
     with pytest.raises(expected):
         await client.async_set_device_data(_protobuf_lock(), {"bolt_locked": True})
@@ -274,7 +279,9 @@ async def test_protobuf_camera_events_stop_after_permission_denied(
     camera_observation_history trait used to warn on every poll.
     """
     # PERMISSION_DENIED, the failure behind issue #61.
-    aioclient_mock.post(SEND_COMMAND_URL, content=_command_response(7, "nope"))
+    aioclient_mock.post(
+        SEND_COMMAND_URL, content=_command_response(7, "authentication failed")
+    )
     camera = _protobuf_camera()
 
     assert await client.async_get_camera_events(camera) == []
