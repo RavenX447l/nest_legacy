@@ -28,18 +28,10 @@ from .coordinator import NestCoordinator
 
 def _config_entry_id_for_device(hass: HomeAssistant, device_id: str) -> str | None:
     """Return the id of the Nest Legacy config entry that owns a device."""
-    lookup = getattr(dr, "async_get_device_and_config_entry_for_domain", None)
-    if lookup is not None:
-        # Home Assistant 2026.9+: a device belongs to a single config entry and
-        # DeviceEntry.config_entries is deprecated (warns from 2026.10, removed in
-        # 2027.10). The helper also picks this integration's entry for a device id
-        # stored before the 2026.8 device split.
-        _device_entry, config_entry = lookup(hass, device_id, domain=DOMAIN)
-        return config_entry.entry_id if config_entry is not None else None
-    device_entry = dr.async_get(hass).async_get(device_id)
-    if device_entry and device_entry.config_entries:
-        return next(iter(device_entry.config_entries), None)
-    return None
+    _device_entry, config_entry = dr.async_get_device_and_config_entry_for_domain(
+        hass, device_id, domain=DOMAIN
+    )
+    return config_entry.entry_id if config_entry is not None else None
 
 
 def async_setup_services(hass: HomeAssistant) -> None:
