@@ -714,6 +714,16 @@ async def test_protobuf_protect(parser: NestParser, raw_data: dict[str, Any]) ->
     assert not protect.co_status
 
 
+async def test_unnamed_camera(parser: NestParser, raw_data: dict[str, Any]) -> None:
+    """A camera named only by its room gets the same name as over protobuf."""
+    raw_data["quartz.18B430CCCCCC0002"]["description"] = ""
+
+    camera = _by_serial(parser, raw_data)["18B430CCCCCC0002"]
+
+    assert camera.name == "Camera"
+    assert camera.location == "Front Door"
+
+
 async def test_protobuf_camera(parser: NestParser, raw_data: dict[str, Any]) -> None:
     """A protobuf camera reports whether it is recording."""
     camera = _by_serial(parser, raw_data)[CAMERA_SERIAL]

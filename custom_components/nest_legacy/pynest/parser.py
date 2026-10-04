@@ -818,6 +818,8 @@ class NestParser:
         """Parse a Nest Camera or Doorbell."""
         streaming_state = value.get("streaming_state", "")
         model = value.get("model", "")
+        # Cameras named only by their room have an empty description.
+        name = value.get("description") or "Camera"
         props = value.get("properties", {})
 
         battery_level = None
@@ -834,7 +836,7 @@ class NestParser:
                 object_key=key,
                 serial_number=value["serial_number"],
                 location=self._get_location(value, wheres_map),
-                name=value.get("description", "Camera"),
+                name=name,
                 model=model,
                 software_version=value.get("software_version"),
                 mac_address=value.get("mac_address"),
@@ -860,7 +862,7 @@ class NestParser:
             object_key=key,
             serial_number=value["serial_number"],
             location=self._get_location(value, wheres_map),
-            name=value.get("description", "Camera"),
+            name=name,
             model=model,
             software_version=value.get("software_version"),
             mac_address=value.get("mac_address"),
