@@ -99,8 +99,13 @@ _NON_RETRYABLE_CODES = frozenset(
     }
 )
 
-# Needed to get the "STRUCTURE_" key (see _parse_structure in parser.py)
-_OBSERVER_ALWAYS_INCLUDE_TRAITS = (nest_occupancy_pb2.StructureModeTrait,)
+# Needed to get the "STRUCTURE_" key of each REST structure, which
+# StructureInfoTrait links through rtsStructureId (see _parse_structure in
+# parser.py)
+_OBSERVER_ALWAYS_INCLUDE_TRAITS = (
+    nest_occupancy_pb2.StructureModeTrait,
+    nest_structure_pb2.StructureInfoTrait,
+)
 
 # Lock-specific traits
 _OBSERVE_LOCK_TRAITS = (

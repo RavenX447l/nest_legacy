@@ -20,6 +20,7 @@ from custom_components.nest_legacy.pynest.models import (
 from custom_components.nest_legacy.pynest.parser import NestParser
 from custom_components.nest_legacy.pynest.protobuf_gen.nest.trait import (
     hvac_pb2 as nest_hvac_pb2,
+    structure_pb2 as nest_structure_pb2,
 )
 from custom_components.nest_legacy.pynest.protobuf_gen.weave.trait import (
     description_pb2 as weave_description_pb2,
@@ -35,6 +36,7 @@ from ..const import (
     HOT_WATER_TRANSITION_SECONDS,
     LOCK_SERIAL,
     PROTECT_SERIAL,
+    STRUCTURE_KEY,
     TEMP_SENSOR_SERIAL,
     THERMOSTAT_KEY,
     THERMOSTAT_SERIAL,
@@ -280,6 +282,104 @@ async def test_structure_needs_its_protobuf_key(
         for device in parser.parse_all(raw_data).devices
         if isinstance(device, NestStructure)
     ]
+
+
+def _structures(parser: NestParser, raw_data: dict[str, Any]) -> list[NestStructure]:
+    """Return the parsed structures."""
+    return [
+        device
+        for device in parser.parse_all(raw_data).devices
+        if isinstance(device, NestStructure)
+    ]
+
+
+def _add_home(raw_data: dict[str, Any], rest_id: str, resource_id: str) -> None:
+    """Add a second home with both its REST bucket and protobuf resource."""
+    raw_data[f"structure.{rest_id}"] = {
+        **raw_data["structure.00000000-0000-0000-0000-000000000001"],
+        "name": "Cabin",
+        "away": True,
+    }
+    raw_data[resource_id] = {
+        **raw_data[STRUCTURE_KEY],
+        nest_structure_pb2.StructureInfoTrait.DESCRIPTOR.full_name: (
+            nest_structure_pb2.StructureInfoTrait(
+                name="Cabin", rtsStructureId=f"structure.{rest_id}"
+            )
+        ),
+    }
+
+
+async def test_rest_structure_is_not_duplicated(
+    parser: NestParser, raw_data: dict[str, Any]
+) -> None:
+    """A home with a REST bucket is parsed from it, not again from protobuf."""
+    structures = _structures(parser, raw_data)
+
+    assert len(structures) == 1
+    assert not structures[0].is_protobuf
+    assert structures[0].object_key == STRUCTURE_KEY
+
+
+async def test_protobuf_structure(parser: NestParser, raw_data: dict[str, Any]) -> None:
+    """Without its REST bucket, the home is parsed from protobuf instead.
+
+    It keeps the serial number of the REST structure, so switching the
+    protobuf option does not replace the device.
+    """
+    del raw_data["structure.00000000-0000-0000-0000-000000000001"]
+
+    structures = _structures(parser, raw_data)
+
+    assert len(structures) == 1
+    structure = structures[0]
+    assert structure.is_protobuf
+    assert structure.object_key == STRUCTURE_KEY
+    assert structure.serial_number == "00000000-0000-0000-0000-000000000001"
+    assert structure.name == "Test Home"
+    assert structure.mode is StructureMode.HOME
+    # The street address is not a room to suggest as the device's area.
+    assert structure.location is None
+
+
+async def test_each_home_gets_its_own_protobuf_key(
+    parser: NestParser, raw_data: dict[str, Any]
+) -> None:
+    """Each REST structure controls the protobuf resource that names it."""
+    # Listed first, so picking the first protobuf structure would get it wrong.
+    raw_data = {"STRUCTURE_00000000000000AA": {}, **raw_data}
+    _add_home(raw_data, "cabin-id", "STRUCTURE_00000000000000AA")
+
+    keys = {
+        structure.serial_number: structure.object_key
+        for structure in _structures(parser, raw_data)
+    }
+
+    assert keys == {
+        "00000000-0000-0000-0000-000000000001": STRUCTURE_KEY,
+        "cabin-id": "STRUCTURE_00000000000000AA",
+    }
+
+
+async def test_ambiguous_protobuf_structure_is_skipped(
+    parser: NestParser, raw_data: dict[str, Any]
+) -> None:
+    """With several unidentified protobuf homes, none is guessed."""
+    raw_data[STRUCTURE_KEY] = {}
+    raw_data["STRUCTURE_00000000000000AA"] = {}
+
+    assert not _structures(parser, raw_data)
+
+
+async def test_lone_unidentified_protobuf_structure_is_used(
+    parser: NestParser, raw_data: dict[str, Any]
+) -> None:
+    """A single protobuf home without StructureInfoTrait is still matched."""
+    raw_data[STRUCTURE_KEY] = {}
+
+    structures = _structures(parser, raw_data)
+
+    assert [structure.object_key for structure in structures] == [STRUCTURE_KEY]
 
 
 @pytest.mark.parametrize(

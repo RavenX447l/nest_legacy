@@ -183,6 +183,28 @@ def _get_protobuf_location(
     return None
 
 
+def _find_protobuf_structure_key(rest_key: str, raw_data: dict[str, Any]) -> str | None:
+    """Return the protobuf resource id of the REST structure "structure.<uuid>".
+
+    StructureInfoTrait links the two through rtsStructureId. Without it the
+    only safe guess is a lone protobuf structure: with several, a wrong guess
+    would make one home's mode control another.
+    """
+    structure_keys = [key for key in raw_data if key.startswith("STRUCTURE_")]
+    for key in structure_keys:
+        info: nest_structure_pb2.StructureInfoTrait | None = raw_data[key].get(
+            nest_structure_pb2.StructureInfoTrait.DESCRIPTOR.full_name
+        )
+        if info and info.rtsStructureId == rest_key:
+            return key
+    if len(structure_keys) == 1 and (
+        nest_structure_pb2.StructureInfoTrait.DESCRIPTOR.full_name
+        not in raw_data[structure_keys[0]]
+    ):
+        return structure_keys[0]
+    return None
+
+
 def _hot_water_traits_report_data(traits: dict[str, Any]) -> bool:
     """Return True when the hot water traits carry actual hot water data.
 
@@ -292,6 +314,8 @@ class NestParser:
                     device = self._parse_camera(key, value, wheres_map)
                 elif key.startswith("structure."):
                     device = self._parse_structure(key, value, raw_data)
+                elif key.startswith("STRUCTURE_"):
+                    device = self._parse_protobuf_structure(key, value, raw_data)
                 elif key.startswith("DEVICE_"):
                     # Handle protobuf devices
                     if weave_security_pb2.BoltLockTrait.DESCRIPTOR.full_name in value:
@@ -326,11 +350,6 @@ class NestParser:
                         device = self._parse_protobuf_sensor(
                             key, value, raw_data, wheres_map
                         )
-                    elif (
-                        nest_structure_pb2.StructureInfoTrait.DESCRIPTOR.full_name
-                        in value
-                    ):
-                        device = self._parse_protobuf_structure(key, value)
 
                 if device:
                     devices.append(device)
@@ -857,9 +876,7 @@ class NestParser:
         self, key: str, value: dict[str, Any], raw_data: dict[str, Any]
     ) -> NestStructure | None:
         """Parse a Nest Structure."""
-        structure_key = next(
-            (key for key in raw_data if key.startswith("STRUCTURE_")), None
-        )
+        structure_key = _find_protobuf_structure_key(key, raw_data)
         if not structure_key:
             return None  # Cannot control structure without its protobuf key
         mode = StructureMode.HOME
@@ -2453,30 +2470,31 @@ class NestParser:
         )
 
     def _parse_protobuf_structure(
-        self, key: str, traits: dict[str, Any]
+        self, key: str, traits: dict[str, Any], raw_data: dict[str, Any]
     ) -> NestStructure | None:
         """Parse a Nest Structure from protobuf data."""
-        if not traits.get(nest_structure_pb2.StructureInfoTrait.DESCRIPTOR.full_name):
-            return None
-
-        # Structure Info
         info_trait: nest_structure_pb2.StructureInfoTrait | None = traits.get(
             nest_structure_pb2.StructureInfoTrait.DESCRIPTOR.full_name
         )
-        # Location
-        location_trait: nest_structure_pb2.StructureLocationTrait | None = traits.get(
-            nest_structure_pb2.StructureLocationTrait.DESCRIPTOR.full_name
-        )
+        if not info_trait:
+            return None
 
-        # Identity
-        identity_trait: weave_description_pb2.DeviceIdentityTrait | None = traits.get(
-            weave_description_pb2.DeviceIdentityTrait.DESCRIPTOR.full_name
-        )
-        serial_number = (
-            identity_trait.serialNumber
-            if identity_trait
-            else key.rsplit(".", maxsplit=1)[-1]
-        )  # Fallback
+        # The same home is parsed from its REST bucket when that is subscribed.
+        rest_key = info_trait.rtsStructureId
+        if rest_key in raw_data:
+            return None
+
+        # Use the REST structure id as the serial number, like the REST parser
+        # does, so switching between REST and protobuf keeps the same device.
+        if rest_key.startswith("structure."):
+            serial_number = rest_key.split(".", maxsplit=1)[1]
+        else:
+            identity_trait: weave_description_pb2.DeviceIdentityTrait | None = (
+                traits.get(
+                    weave_description_pb2.DeviceIdentityTrait.DESCRIPTOR.full_name
+                )
+            )
+            serial_number = identity_trait.serialNumber if identity_trait else key
 
         # Mode
         mode = StructureMode.HOME
@@ -2500,13 +2518,12 @@ class NestParser:
             ):
                 mode = StructureMode.VACATION
 
+        # No location: it becomes the device's suggested area, and the street
+        # address is not a room.
         return NestStructure(
             object_key=key,
             serial_number=serial_number,
-            name=info_trait.name if info_trait else "Home",
-            location=location_trait.addressLines[0]
-            if location_trait and location_trait.addressLines
-            else None,
+            name=info_trait.name or "Home",
             mode=mode,
             is_protobuf=True,
         )
