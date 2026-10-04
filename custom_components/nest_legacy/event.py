@@ -16,6 +16,7 @@ from .const import LOGGER
 from .coordinator import NestConfigEntry, NestCoordinator
 from .entity import NestEntity
 from .events import (
+    EVENT_TYPE_CAMERA_ANIMAL,
     EVENT_TYPE_CAMERA_FACE,
     EVENT_TYPE_CAMERA_MOTION,
     EVENT_TYPE_CAMERA_PERSON,
@@ -37,6 +38,9 @@ _NEST_EVENT_TYPE_MAP = {
     "dog-barking": EVENT_TYPE_CAMERA_SOUND,
     "face": EVENT_TYPE_CAMERA_FACE,
     "unfamiliar-face": EVENT_TYPE_CAMERA_FACE,
+    "animal": EVENT_TYPE_CAMERA_ANIMAL,
+    "animal-dog": EVENT_TYPE_CAMERA_ANIMAL,
+    "animal-cat": EVENT_TYPE_CAMERA_ANIMAL,
     "doorbell": EVENT_TYPE_DOORBELL_CHIME,
 }
 
@@ -49,6 +53,9 @@ _NEST_EVENT_TYPE_PRIORITY: list[str] = [
     "face",
     "unfamiliar-face",
     "person",
+    "animal-dog",
+    "animal-cat",
+    "animal",
     "person-talking",
     "dog-barking",
     "sound",
@@ -84,6 +91,7 @@ _DESCRIPTIONS: tuple[NestEventEntityDescription, ...] = (
             EVENT_TYPE_CAMERA_PERSON,
             EVENT_TYPE_CAMERA_SOUND,
             EVENT_TYPE_CAMERA_FACE,
+            EVENT_TYPE_CAMERA_ANIMAL,
         ],
         event_filter=[
             "motion",
@@ -93,6 +101,9 @@ _DESCRIPTIONS: tuple[NestEventEntityDescription, ...] = (
             "person-talking",
             "dog-barking",
             "unfamiliar-face",
+            "animal",
+            "animal-dog",
+            "animal-cat",
         ],
         device_types=(NestCamera,),
     ),

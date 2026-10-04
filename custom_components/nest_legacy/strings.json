@@ -114,6 +114,7 @@
           "event_type": {
             "name": "Event type",
             "state": {
+              "camera_animal": "Animal",
               "camera_face": "Face",
               "camera_motion": "Motion",
               "camera_person": "Person",

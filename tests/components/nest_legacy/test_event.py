@@ -119,3 +119,27 @@ async def test_sound_events(
     state = hass.states.get(MOTION_ENTITY)
     assert state is not None
     assert state.attributes[ATTR_EVENT_TYPE] == "camera_sound"
+
+
+@pytest.mark.parametrize(
+    ("types", "expected"),
+    [
+        (["motion", "animal"], "camera_animal"),
+        (["motion", "animal", "animal-dog"], "camera_animal"),
+        (["motion", "animal", "animal-cat"], "camera_animal"),
+        (["motion", "person", "animal"], "camera_person"),
+    ],
+)
+async def test_animal_events(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    types: list[str],
+    expected: str,
+) -> None:
+    """An animal sighting is reported unless a person was also seen."""
+    _fire(hass, types)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(MOTION_ENTITY)
+    assert state is not None
+    assert state.attributes[ATTR_EVENT_TYPE] == expected
