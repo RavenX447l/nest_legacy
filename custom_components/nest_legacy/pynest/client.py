@@ -2429,19 +2429,13 @@ class NestClient:
         for t in cam_event.eventType:
             try:
                 t_str = event_type_enum.Name(t)
-                # Map Protobuf enums to legacy API string formats
-                if t_str == "EVENT_UNFAMILIAR_FACE":
-                    event_types.append("unfamiliar-face")
-                elif t_str == "EVENT_PERSON_TALKING":
-                    event_types.append("personHeard")
-                elif t_str == "EVENT_DOG_BARKING":
-                    event_types.append("dogBarking")
-                elif t_str.startswith("EVENT_"):
-                    event_types.append(t_str[6:].lower())
-                else:
-                    event_types.append(t_str.lower())
             except ValueError:
                 continue
+            # Use the REST cuepoint names, which the Nest web app spells
+            # EVENT_PERSON_TALKING as "person-talking", EVENT_DOG_BARKING as
+            # "dog-barking" and EVENT_PACKAGE_DELIVERED as "package-delivered",
+            # so both APIs report the same types.
+            event_types.append(t_str.removeprefix("EVENT_").lower().replace("_", "-"))
 
         if not event_types:
             return

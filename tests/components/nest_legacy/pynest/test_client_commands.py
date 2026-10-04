@@ -17,6 +17,9 @@ from custom_components.nest_legacy.pynest.models import (
     NestProtect,
     NestThermostat,
 )
+from custom_components.nest_legacy.pynest.protobuf_gen.nest.trait import (
+    history_pb2 as nest_history_pb2,
+)
 from custom_components.nest_legacy.pynest.protobuf_gen.nestlabs.gateway import v1_pb2
 import pytest
 
@@ -304,3 +307,48 @@ async def test_protobuf_camera_events_keep_polling_after_a_transient_error(
 
     # One session call plus three attempts for each of the two polls.
     assert len(aioclient_mock.mock_calls) == 7
+
+
+_EventType = nest_history_pb2.CameraObservationHistoryTrait.CameraObservationHistoryResponse.CameraEventTimeWindow.EventType
+
+
+def _camera_history_response(*event_types: int) -> bytes:
+    """Return a serialized camera history answer with one event of these types."""
+    history = nest_history_pb2.CameraObservationHistoryTrait.CameraObservationHistoryResponse()
+    event = history.cameraEventWindow.cameraEvent.add(eventId="event-1")
+    event.eventType.extend(event_types)
+    event.startTime.seconds = 1790000000
+    event.endTime.seconds = 1790000010
+    response = v1_pb2.SendCommandResponse()
+    operation = response.sendCommandResponse.add().traitOperations.add()
+    operation.event.event.Pack(history, type_url_prefix="type.nestlabs.com/")
+    return response.SerializeToString()
+
+
+async def test_protobuf_camera_events_use_the_rest_type_names(
+    client: NestClient, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Protobuf event types are named like the REST cuepoint API names them."""
+    aioclient_mock.post(
+        SEND_COMMAND_URL,
+        content=_camera_history_response(
+            _EventType.EVENT_MOTION,
+            _EventType.EVENT_PERSON_TALKING,
+            _EventType.EVENT_DOG_BARKING,
+            _EventType.EVENT_UNFAMILIAR_FACE,
+            _EventType.EVENT_PACKAGE_DELIVERED,
+            _EventType.EVENT_ANIMAL_DOG,
+        ),
+    )
+    events = await client.async_get_camera_events(_protobuf_camera())
+
+    assert [event["types"] for event in events] == [
+        [
+            "motion",
+            "person-talking",
+            "dog-barking",
+            "unfamiliar-face",
+            "package-delivered",
+            "animal-dog",
+        ]
+    ]

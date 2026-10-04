@@ -103,3 +103,19 @@ async def test_unrelated_event_types_are_ignored(
 
     assert hass.states.get(CHIME_ENTITY).state == STATE_UNKNOWN
     assert hass.states.get(MOTION_ENTITY).state != STATE_UNKNOWN
+
+
+@pytest.mark.parametrize(
+    "types",
+    [["sound"], ["sound", "person-talking"], ["sound", "dog-barking"]],
+)
+async def test_sound_events(
+    hass: HomeAssistant, init_integration: MockConfigEntry, types: list[str]
+) -> None:
+    """Sounds are reported under the names the REST cuepoint API uses."""
+    _fire(hass, types)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(MOTION_ENTITY)
+    assert state is not None
+    assert state.attributes[ATTR_EVENT_TYPE] == "camera_sound"

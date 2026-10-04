@@ -27,14 +27,14 @@ from .pynest.models import NestCamera, NestDevice, NestDoorbell
 
 PARALLEL_UPDATES = 0
 
-# Maps Nest API event types to Home Assistant event types
+# Maps Nest event types, as the REST cuepoint API names them (the client gives
+# protobuf events the same names), to Home Assistant event types
 _NEST_EVENT_TYPE_MAP = {
     "motion": EVENT_TYPE_CAMERA_MOTION,
     "person": EVENT_TYPE_CAMERA_PERSON,
     "sound": EVENT_TYPE_CAMERA_SOUND,
     "person-talking": EVENT_TYPE_CAMERA_SOUND,  # Grouped with sound
-    "personHeard": EVENT_TYPE_CAMERA_SOUND,
-    "dogBarking": EVENT_TYPE_CAMERA_SOUND,
+    "dog-barking": EVENT_TYPE_CAMERA_SOUND,
     "face": EVENT_TYPE_CAMERA_FACE,
     "unfamiliar-face": EVENT_TYPE_CAMERA_FACE,
     "doorbell": EVENT_TYPE_DOORBELL_CHIME,
@@ -49,9 +49,8 @@ _NEST_EVENT_TYPE_PRIORITY: list[str] = [
     "face",
     "unfamiliar-face",
     "person",
-    "personHeard",
     "person-talking",
-    "dogBarking",
+    "dog-barking",
     "sound",
     "motion",
 ]
@@ -92,8 +91,7 @@ _DESCRIPTIONS: tuple[NestEventEntityDescription, ...] = (
             "sound",
             "face",
             "person-talking",
-            "personHeard",
-            "dogBarking",
+            "dog-barking",
             "unfamiliar-face",
         ],
         device_types=(NestCamera,),
