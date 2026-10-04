@@ -19,8 +19,11 @@ from .events import (
     EVENT_TYPE_CAMERA_ANIMAL,
     EVENT_TYPE_CAMERA_FACE,
     EVENT_TYPE_CAMERA_MOTION,
+    EVENT_TYPE_CAMERA_PACKAGE_DELIVERED,
+    EVENT_TYPE_CAMERA_PACKAGE_RETRIEVED,
     EVENT_TYPE_CAMERA_PERSON,
     EVENT_TYPE_CAMERA_SOUND,
+    EVENT_TYPE_CAMERA_VEHICLE,
     EVENT_TYPE_DOORBELL_CHIME,
     NEST_LEGACY_EVENT,
 )
@@ -41,21 +44,28 @@ _NEST_EVENT_TYPE_MAP = {
     "animal": EVENT_TYPE_CAMERA_ANIMAL,
     "animal-dog": EVENT_TYPE_CAMERA_ANIMAL,
     "animal-cat": EVENT_TYPE_CAMERA_ANIMAL,
+    "vehicle": EVENT_TYPE_CAMERA_VEHICLE,
+    "package-delivered": EVENT_TYPE_CAMERA_PACKAGE_DELIVERED,
+    "package-retrieved": EVENT_TYPE_CAMERA_PACKAGE_RETRIEVED,
     "doorbell": EVENT_TYPE_DOORBELL_CHIME,
 }
 
 
 # Priority order for selecting a single HA event type when a Nest event carries
 # multiple types simultaneously (e.g. ["person", "face"]). More specific types
-# rank higher so the richest event type wins.
+# rank higher so the richest event type wins. A package event usually also
+# carries the person who delivered or retrieved it, so it ranks above them.
 _NEST_EVENT_TYPE_PRIORITY: list[str] = [
     "doorbell",
+    "package-delivered",
+    "package-retrieved",
     "face",
     "unfamiliar-face",
     "person",
     "animal-dog",
     "animal-cat",
     "animal",
+    "vehicle",
     "person-talking",
     "dog-barking",
     "sound",
@@ -92,6 +102,9 @@ _DESCRIPTIONS: tuple[NestEventEntityDescription, ...] = (
             EVENT_TYPE_CAMERA_SOUND,
             EVENT_TYPE_CAMERA_FACE,
             EVENT_TYPE_CAMERA_ANIMAL,
+            EVENT_TYPE_CAMERA_VEHICLE,
+            EVENT_TYPE_CAMERA_PACKAGE_DELIVERED,
+            EVENT_TYPE_CAMERA_PACKAGE_RETRIEVED,
         ],
         event_filter=[
             "motion",
@@ -104,6 +117,9 @@ _DESCRIPTIONS: tuple[NestEventEntityDescription, ...] = (
             "animal",
             "animal-dog",
             "animal-cat",
+            "vehicle",
+            "package-delivered",
+            "package-retrieved",
         ],
         device_types=(NestCamera,),
     ),
