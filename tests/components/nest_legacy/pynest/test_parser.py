@@ -20,6 +20,7 @@ from custom_components.nest_legacy.pynest.models import (
 from custom_components.nest_legacy.pynest.parser import NestParser
 from custom_components.nest_legacy.pynest.protobuf_gen.nest.trait import (
     hvac_pb2 as nest_hvac_pb2,
+    located_pb2 as nest_located_pb2,
     structure_pb2 as nest_structure_pb2,
 )
 from custom_components.nest_legacy.pynest.protobuf_gen.weave.trait import (
@@ -34,6 +35,7 @@ from ..const import (
     CAMERA_SERIAL,
     HEAT_LINK_SERIAL,
     HOT_WATER_TRANSITION_SECONDS,
+    LOCK_KEY,
     LOCK_SERIAL,
     PROTECT_SERIAL,
     STRUCTURE_KEY,
@@ -110,6 +112,24 @@ async def test_locations_come_from_both_apis(
     assert devices["09AA00AA00AA0AAA"].location == "Hallway"
     assert devices["18B430CCCCCC0001"].location == "Bedroom"
     assert devices[LOCK_SERIAL].location == "Front Door"
+
+
+async def test_room_names_are_trimmed(
+    parser: NestParser, raw_data: dict[str, Any]
+) -> None:
+    """Stray whitespace in a room name stays out of the location."""
+    for where in raw_data["where.00000000-0000-0000-0000-000000000001"]["wheres"]:
+        where["name"] = f" {where['name']} "
+    located = raw_data[LOCK_KEY][
+        nest_located_pb2.DeviceLocatedSettingsTrait.DESCRIPTOR.full_name
+    ]
+    located.whereLabel.literal = " Kids Room"
+
+    devices = _by_serial(parser, raw_data)
+
+    assert devices["09AA00AA00AA0AAA"].location == "Hallway"
+    assert devices["18B430CCCCCC0001"].location == "Bedroom"
+    assert devices[LOCK_SERIAL].location == "Kids Room"
 
 
 async def test_thermostat_values(parser: NestParser, raw_data: dict[str, Any]) -> None:

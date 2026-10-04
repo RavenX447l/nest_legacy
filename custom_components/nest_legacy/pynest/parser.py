@@ -155,10 +155,14 @@ def _get_protobuf_location(
         return None
 
     # 1. Try explicit literals (these are sometimes stripped in delta updates)
-    if loc_trait.HasField("whereLabel") and loc_trait.whereLabel.literal:
-        return loc_trait.whereLabel.literal
-    if loc_trait.HasField("fixtureNameLabel") and loc_trait.fixtureNameLabel.literal:
-        return loc_trait.fixtureNameLabel.literal
+    if loc_trait.HasField("whereLabel") and (
+        label := loc_trait.whereLabel.literal.strip()
+    ):
+        return label
+    if loc_trait.HasField("fixtureNameLabel") and (
+        label := loc_trait.fixtureNameLabel.literal.strip()
+    ):
+        return label
 
     # 2. Try looking up the Area/Where IDs in the cached catalogs
     if loc_trait.HasField("whereAnnotationRid"):
@@ -407,7 +411,9 @@ class NestParser:
                     if f_item.HasField("fixtureId") and f_item.HasField("label"):
                         wheres_map[f_item.fixtureId.resourceId] = f_item.label.literal
 
-        return wheres_map
+        # Room names can carry stray whitespace (" Kids Room"), which would
+        # otherwise end up in device names and suggested areas.
+        return {where_id: name.strip() for where_id, name in wheres_map.items()}
 
     def _get_location(
         self, data: dict[str, Any], wheres_map: dict[str, str]
