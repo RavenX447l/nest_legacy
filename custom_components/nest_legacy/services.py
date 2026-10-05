@@ -26,14 +26,6 @@ from .const import DOMAIN
 from .coordinator import NestCoordinator
 
 
-def _config_entry_id_for_device(hass: HomeAssistant, device_id: str) -> str | None:
-    """Return the id of the Nest Legacy config entry that owns a device."""
-    _device_entry, config_entry = dr.async_get_device_and_config_entry_for_domain(
-        hass, device_id, domain=DOMAIN
-    )
-    return config_entry.entry_id if config_entry is not None else None
-
-
 def async_setup_services(hass: HomeAssistant) -> None:
     """Register services for Nest Legacy."""
 
@@ -42,7 +34,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
         config_entry_id = call.data.get("config_entry_id")
         device_id = call.data.get("device_id")
         if not config_entry_id and device_id:
-            config_entry_id = _config_entry_id_for_device(hass, device_id)
+            _device_entry, config_entry = (
+                dr.async_get_device_and_config_entry_for_domain(
+                    hass, device_id, domain=DOMAIN
+                )
+            )
+            if config_entry is not None:
+                config_entry_id = config_entry.entry_id
 
         entry = None
         if not config_entry_id:
